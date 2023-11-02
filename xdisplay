@@ -176,7 +176,6 @@ else
                 xrandr --output "$default_display" --brightness "$1"
                 save_brightness "$default_display" "$1"
             else
-                echo "HERE1"
                 echo "Invalid argument or value. Use 'xdisplay --list' to see available displays or 'xdisplay --default' to set the default display."
             fi
         else
