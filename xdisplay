@@ -1,0 +1,190 @@
+#!/bin/bash
+
+# Define the directory for storing display information
+config_dir="$HOME/.config/xdisplay"
+brightness_config_dir="$config_dir/brightness"
+config_file="$config_dir/config"
+
+# Ensure the config directory and subfolder exist
+mkdir -p "$config_dir"
+mkdir -p "$brightness_config_dir"
+
+# Get the list of connected displays
+get_connected_displays() {
+    xrandr -q | grep " connected" | awk '{print $1}'
+}
+
+# Check if the display is in the list of connected displays
+is_valid_display() {
+    local display_name="$1"
+    for display in "${connected_displays[@]}"; do
+        if [ "$display_name" = "$display" ]; then
+            return 0 # Display is valid
+        fi
+    done
+    return 1 # Display is not valid
+}
+
+# List connected displays
+list_connected_displays() {
+    connected_displays=($(get_connected_displays))
+    for display in "${connected_displays[@]}"; do
+        echo "$display"
+    done
+}
+
+# Get the brightness level for a display
+get_brightness() {
+    local display_name="$1"
+    local brightness_file="$brightness_config_dir/$display_name"
+
+    if [ -f "$brightness_file" ]; then
+        cat "$brightness_file"
+    else
+        echo "1.0" # Default brightness level
+    fi
+}
+
+# Save the brightness level for a display
+save_brightness() {
+    local display_name="$1"
+    local brightness_level="$2"
+    local brightness_file="$brightness_config_dir/$display_name"
+
+    echo "$brightness_level" >"$brightness_file"
+}
+
+# Increment or decrement brightness
+increment_decrement_brightness() {
+    local display_name="$1"
+    local direction="$2"
+    local current_brightness
+    current_brightness=$(get_brightness "$display_name")
+
+    if [ "$direction" = "up" ]; then
+        current_brightness=$(awk "BEGIN {brightness=$current_brightness + 0.1; if (brightness > 1.0) brightness = 1.0; if (brightness < 0.1) brightness = 0.1; print brightness}")
+    elif [ "$direction" = "down" ]; then
+        current_brightness=$(awk "BEGIN {brightness=$current_brightness - 0.1; if (brightness > 1.0) brightness = 1.0; if (brightness < 0.1) brightness = 0.1; print brightness}")
+    fi
+
+    xrandr --output "$display_name" --brightness "$current_brightness"
+    save_brightness "$display_name" "$current_brightness"
+}
+
+# Save the default display value in the config file
+save_default_display() {
+    local default_display="$1"
+    echo "DEFAULT_DISPLAY=$default_display" >"$config_file"
+}
+
+# Read the default display value from the config file
+read_default_display() {
+    if [ -f "$config_file" ]; then
+        source "$config_file"
+        echo "$DEFAULT_DISPLAY"
+    else
+        echo ""
+    fi
+}
+
+# Get the default display and validate it
+get_default_display() {
+    default_display=$(read_default_display)
+    if [ -z "$default_display" ]; then
+        echo "Default display is not set. Use 'xdisplay --save-default <display_name>' to set the default display."
+        exit 1
+    fi
+    echo "$default_display"
+}
+
+display_help() {
+    # Display ASCII art and contact information
+    echo "   __             "
+    echo "  |  \. _ _ | _    "
+    echo ")(|__/|_)|_)|(_|\/ "
+    echo "         |      /  "
+    echo
+    echo "github.com/the-robot"
+    echo
+    echo "Usage:"
+    echo "  To list connected displays: xdisplay --list or xdisplay -l"
+    echo "  To adjust brightness: xdisplay --brightness <display_name> <brightness_level>, xdisplay -b <display_name> <brightness_level>"
+    echo "  To increment brightness: xdisplay --brightness <display_name> up, xdisplay -b <display_name> up"
+    echo "  To decrement brightness: xdisplay --brightness <display_name> down, xdisplay -b <display_name> down"
+    echo "  To save the default display: xdisplay --save-default <display_name>, xdisplay -s <display_name>"
+    echo "  To display the default display: xdisplay --default"
+    echo "  To increment the default display brightness: xdisplay up"
+    echo "  To decrement the default display brightness: xdisplay down"
+    echo "  To change the default display brightness: xdisplay 0.5"
+    echo
+    echo "Example:"
+    echo "  List displays: xdisplay -l"
+    echo "  Adjust brightness: xdisplay -b eDP-1 0.7"
+    echo "  Save the default display: xdisplay -s eDP-1"
+    echo "  Display the default display: xdisplay --default"
+}
+
+if [ "$#" -eq 1 ] && [ "$1" = "--list" ] || [ "$1" = "-l" ]; then
+    # List connected displays
+    list_connected_displays
+elif [ "$#" -eq 1 ] && [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
+    display_help
+elif [ "$#" -eq 3 ] && [ "$1" = "--brightness" ] || [ "$1" = "-b" ]; then
+    # Adjust brightness
+    display_name="$2"
+    brightness_param="$3"
+
+    # Check if the specified display is in the list of connected displays
+    connected_displays=($(get_connected_displays))
+    if is_valid_display "$display_name"; then
+        if [ "$brightness_param" = "up" ] || [ "$brightness_param" = "down" ]; then
+            # Increment or decrement brightness
+            increment_decrement_brightness "$display_name" "$brightness_param"
+        else
+            # Check if brightness level is within the valid range (0.1 to 1)
+            if (($(awk 'BEGIN {print ('$brightness_param' >= 0.1 && '$brightness_param' <= 1)}'))); then
+                xrandr --output "$display_name" --brightness "$brightness_param"
+                save_brightness "$display_name" "$brightness_param"
+            else
+                echo "Brightness level must be between 0.1 and 1."
+            fi
+        fi
+    else
+        echo "Invalid display name. Use 'xdisplay --list' to see available displays."
+    fi
+elif [ "$#" -eq 2 ] && [ "$1" = "--save-default" ] || [ "$1" = "-s" ]; then
+    # Save the default display value
+    display_name="$2"
+    save_default_display "$display_name"
+elif [ "$#" -eq 1 ] && [ "$1" = "--default" ]; then
+    # Read and display the default display value
+    default_display=$(read_default_display)
+    if [ -z "$default_display" ]; then
+        echo "Default display is not set. Use 'xdisplay --save-default <display_name>' to set the default display."
+    else
+        echo "Default display: $default_display"
+    fi
+else
+    # Use the default display when no arguments or just 'up' or 'down' are provided
+    default_display=$(get_default_display)
+
+    if [ -n "$default_display" ]; then
+        if [ "$#" -eq 1 ]; then
+            if [ -z "$1" ] || [ "$1" = "up" ] || [ "$1" = "down" ]; then
+                increment_decrement_brightness "$default_display" "$1"
+            elif (($(awk 'BEGIN {print ('$1' >= 0.1 && '$1' <= 1)}'))); then
+                xrandr --output "$default_display" --brightness "$1"
+                save_brightness "$default_display" "$1"
+            else
+                echo "HERE1"
+                echo "Invalid argument or value. Use 'xdisplay --list' to see available displays or 'xdisplay --default' to set the default display."
+            fi
+        else
+            display_help
+        fi
+    else
+        echo "Default display is not set. Use 'xdisplay --save-default <display_name>' to set the default display."
+        echo
+        display_help
+    fi
+fi
