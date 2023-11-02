@@ -14,3 +14,8 @@ xdisplay up                            # increase default display brightness
 xdisplay down                          # decrease default display brightness
 xdisplay 0.5                           # set default display brightness
 ```
+
+### Why?
+
+I am just too lazy to type a long-ass `xrandr` command, besides I hate to type my external monitor display everything I want to change the brightness
+so here I am writing some utility script under an hour.
